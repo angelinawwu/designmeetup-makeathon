@@ -13,11 +13,11 @@ const THEME = {
 };
 
 const MOLD_DATA = {
-  1: { fillColor: "#f0c77a", outlineSrc: "/molds/outlines/house.svg", maskSrc: "/molds/masks/house.png", aspectRatio: "758 / 559" },
-  2: { fillColor: "#f3b96a", outlineSrc: "/molds/outlines/bucket.svg", maskSrc: "/molds/masks/bucket.png", aspectRatio: "590 / 559" },
-  3: { fillColor: "#ffd98a", outlineSrc: "/molds/outlines/cone.svg", maskSrc: "/molds/masks/cone.png", aspectRatio: "482 / 559" },
-  4: { fillColor: "#e8c896", outlineSrc: "/molds/outlines/tower.svg", maskSrc: "/molds/masks/tower.png", aspectRatio: "394 / 513" },
-  5: { fillColor: "#dcb87e", outlineSrc: "/molds/outlines/castle.svg", maskSrc: "/molds/masks/castle.png", aspectRatio: "645 / 592" },
+  1: { fillColor: "#ffd98a", outlineSrc: "/molds/outlines/cone.svg", maskSrc: "/molds/masks/cone.png", aspectRatio: "482 / 559" }, // Cone
+  2: { fillColor: "#e8c896", outlineSrc: "/molds/outlines/tower.svg", maskSrc: "/molds/masks/tower.png", aspectRatio: "394 / 513" }, // Tower
+  3: { fillColor: "#dcb87e", outlineSrc: "/molds/outlines/castle.svg", maskSrc: "/molds/masks/castle.png", aspectRatio: "645 / 592" }, // Castle
+  4: { fillColor: "#f3b96a", outlineSrc: "/molds/outlines/bucket.svg", maskSrc: "/molds/masks/bucket.png", aspectRatio: "590 / 559" }, // Bucket
+  5: { fillColor: "#f0c77a", outlineSrc: "/molds/outlines/house.svg", maskSrc: "/molds/masks/house.png", aspectRatio: "758 / 559" }, // House
 } as Record<number, { fillColor: string, outlineSrc: string, maskSrc: string, aspectRatio: string }>;
 
 export default function SandcastleBuilder() {
@@ -236,13 +236,11 @@ export default function SandcastleBuilder() {
     }
     
     const { w, h } = windowSize;
-    const beachY = h * 0.66;
-    const pile = { x: w * 0.13, y: beachY + (h - beachY) * 0.45, r: Math.min(w * 0.09, 110) };
-    const dx = e.clientX - pile.x;
-    const dy = (e.clientY - pile.y) * 1.6;
-    const isOverPile = dx * dx + dy * dy < pile.r * pile.r;
     
-    if (selectedBucket && isOverPile) {
+    // Increase hit detection area to the entire bottom-left quadrant so they can click the bucket animation itself
+    const isOverPileArea = e.clientX < w * 0.35 && e.clientY > h * 0.3;
+    
+    if (selectedBucket && isOverPileArea) {
       setMode('scooping');
     }
   };
