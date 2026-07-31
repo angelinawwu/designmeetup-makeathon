@@ -10,11 +10,15 @@ const THEME = {
   seaGlow:  "rgba(140, 235, 255, 0.25)",
   beach:    [[0, "#e8c896"], [1, "#c9a06a"]] as [number, string][],
   wetSand:  "#a98452",
-  pile:        "#e2bd85",
-  pileShadow:  "#c49a5e",
 };
 
-const BUCKETS = [1, 2, 3, 4, 5];
+const MOLD_DATA = {
+  1: { fillColor: "#f0c77a", outlineSrc: "/molds/outlines/house.svg", maskSrc: "/molds/masks/house.png", aspectRatio: "758 / 559" },
+  2: { fillColor: "#f3b96a", outlineSrc: "/molds/outlines/bucket.svg", maskSrc: "/molds/masks/bucket.png", aspectRatio: "590 / 559" },
+  3: { fillColor: "#ffd98a", outlineSrc: "/molds/outlines/cone.svg", maskSrc: "/molds/masks/cone.png", aspectRatio: "482 / 559" },
+  4: { fillColor: "#e8c896", outlineSrc: "/molds/outlines/tower.svg", maskSrc: "/molds/masks/tower.png", aspectRatio: "394 / 513" },
+  5: { fillColor: "#dcb87e", outlineSrc: "/molds/outlines/castle.svg", maskSrc: "/molds/masks/castle.png", aspectRatio: "645 / 592" },
+} as Record<number, { fillColor: string, outlineSrc: string, maskSrc: string, aspectRatio: string }>;
 
 export default function SandcastleBuilder() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -34,23 +38,15 @@ export default function SandcastleBuilder() {
   useEffect(() => {
     const loadedImages: Record<string, HTMLImageElement> = {};
     let loadedCount = 0;
-    const totalImages = BUCKETS.length * 2;
     
-    BUCKETS.forEach(id => {
-      const bucketImg = new window.Image();
-      bucketImg.src = `/Bucket-${id}.png`;
-      bucketImg.onload = () => {
-        loadedImages[`bucket-${id}`] = bucketImg;
-        loadedCount++;
-        if (loadedCount === totalImages) setImages(loadedImages);
-      };
-      
+    // We only need the Sand shapes for physics
+    [1, 2, 3, 4, 5].forEach(id => {
       const sandImg = new window.Image();
       sandImg.src = `/Sand-${id}.png`;
       sandImg.onload = () => {
         loadedImages[`sand-${id}`] = sandImg;
         loadedCount++;
-        if (loadedCount === totalImages) setImages(loadedImages);
+        if (loadedCount === 5) setImages(loadedImages);
       };
     });
   }, []);
@@ -60,7 +56,6 @@ export default function SandcastleBuilder() {
     if (!canvasRef.current) return;
     
     const engine = Matter.Engine.create();
-    // Tune gravity
     engine.gravity.y = 1.2;
     engineRef.current = engine;
     
@@ -76,28 +71,23 @@ export default function SandcastleBuilder() {
       const ctx = canvasRef.current.getContext('2d');
       if (ctx) ctx.scale(dpr, dpr);
       
-      // Update floor
       const beachY = h * 0.66;
       Matter.World.clear(engine.world, false);
       const ground = Matter.Bodies.rectangle(w / 2, h + 50, w * 2, 100, { 
         isStatic: true,
         friction: 0.8
       });
-      // A firm sand line higher up
       const firmSand = Matter.Bodies.rectangle(w / 2, beachY + (h - beachY) * 0.52 + 50, w * 2, 100, {
         isStatic: true,
         friction: 0.8
       });
       Matter.World.add(engine.world, [ground, firmSand]);
-      
-      // Re-add shapes
       Matter.World.add(engine.world, shapesRef.current);
     };
     
     window.addEventListener('resize', handleResize);
     handleResize();
     
-    // Engine runner
     const runner = Matter.Runner.create();
     Matter.Runner.run(runner, engine);
     
@@ -146,11 +136,11 @@ export default function SandcastleBuilder() {
       ctx.globalAlpha = 1;
       
       // Draw Pile
-      ctx.fillStyle = THEME.pileShadow;
+      ctx.fillStyle = "#c49a5e"; // pileShadow
       ctx.beginPath();
       ctx.ellipse(pile.x, pile.y + pile.r * 0.42, pile.r * 1.1, pile.r * 0.3, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = THEME.pile;
+      ctx.fillStyle = "#e2bd85"; // pile
       ctx.beginPath();
       ctx.ellipse(pile.x, pile.y, pile.r, pile.r * 0.62, 0, Math.PI, 0);
       ctx.closePath();
@@ -163,7 +153,6 @@ export default function SandcastleBuilder() {
           ctx.save();
           ctx.translate(body.position.x, body.position.y);
           ctx.rotate(body.angle);
-          // Standard width is roughly 100 for display
           const displayWidth = 100;
           const displayHeight = (img.height / img.width) * displayWidth;
           ctx.drawImage(img, -displayWidth / 2, -displayHeight / 2, displayWidth, displayHeight);
@@ -184,16 +173,6 @@ export default function SandcastleBuilder() {
         }
       }
       
-      // Fill meter
-      if (mode === 'scooping' || mode === 'carrying') {
-        const mx = pile.x, my = pile.y - pile.r * 0.9;
-        const barW = 74, barH = 8;
-        ctx.fillStyle = "rgba(0,0,0,0.25)";
-        ctx.beginPath(); ctx.roundRect(mx - barW / 2, my, barW, barH, 4); ctx.fill();
-        ctx.fillStyle = THEME.pile;
-        ctx.beginPath(); ctx.roundRect(mx - barW / 2, my, barW * fillLevel, barH, 4); ctx.fill();
-      }
-      
       renderLoopRef.current = requestAnimationFrame(render);
     };
     
@@ -212,7 +191,7 @@ export default function SandcastleBuilder() {
       
       if (mode === 'scooping' && mouseRef.current.down) {
         setFillLevel(f => {
-          const next = f + (1.2 * dt); // scoop rate
+          const next = f + (0.4 * dt); // scoop rate (takes ~2.5s)
           if (next >= 1) {
             setMode('carrying');
             return 1;
@@ -238,7 +217,6 @@ export default function SandcastleBuilder() {
         const displayWidth = 100;
         const displayHeight = (img.height / img.width) * displayWidth;
         
-        // Physics body slightly smaller than image for better overlap
         const body = Matter.Bodies.rectangle(e.clientX, e.clientY, displayWidth * 0.8, displayHeight * 0.9, {
           friction: 0.8,
           restitution: 0.1,
@@ -246,7 +224,6 @@ export default function SandcastleBuilder() {
           label: selectedBucket.toString()
         });
         
-        // Constraint to keep it somewhat upright
         Matter.Body.setInertia(body, Infinity); // prevent rotation for clean stacking
         
         shapesRef.current.push(body);
@@ -283,36 +260,76 @@ export default function SandcastleBuilder() {
     }
   };
 
+  const pileLeft = windowSize.w * 0.13;
+  const pileTop = windowSize.h * 0.66 + (windowSize.h - windowSize.h * 0.66) * 0.45;
+  const selectedMold = selectedBucket ? MOLD_DATA[selectedBucket] : null;
+
   return (
     <div className="relative w-full h-full overflow-hidden">
       <canvas 
         ref={canvasRef}
-        className="block w-full h-full cursor-crosshair"
+        className="absolute inset-0 block w-full h-full cursor-crosshair z-0"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       />
       
-      {/* HUD */}
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-4 pointer-events-none text-[var(--ui-text)]">
-        <h1 className="text-lg tracking-widest opacity-90">tide<em className="italic text-[var(--ui-accent)]">line</em></h1>
+      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-4 pointer-events-none text-[var(--ui-text)] z-10">
+        <h1 className="text-lg tracking-widest opacity-90 font-[Georgia]">tide<em className="italic text-[var(--sand)] font-[Georgia]">line</em></h1>
       </div>
       
-      {/* Coach */}
-      <div className="absolute bottom-28 left-1/2 -translate-x-1/2 italic text-[var(--ui-text-dim)] pointer-events-none text-center opacity-80">
+      <div className="absolute bottom-28 left-1/2 -translate-x-1/2 italic text-[var(--ink-dim)] pointer-events-none text-center opacity-80 z-10 font-[Georgia]">
         {mode === 'idle' && !selectedBucket && 'choose a bucket to begin'}
         {mode === 'idle' && selectedBucket && 'hold on the sand pile to fill your bucket'}
         {mode === 'scooping' && 'keep scooping…'}
-        {mode === 'carrying' && 'click to drop it on the beach'}
+        {mode === 'carrying' && 'click anywhere on the beach to drop it'}
       </div>
+
+      {/* CSS Animation over sand pile */}
+      {selectedMold && (mode === 'scooping' || (mode === 'idle' && fillLevel > 0)) && (
+        <div 
+          className="absolute z-10 pointer-events-none -translate-x-1/2 -translate-y-full"
+          style={{ 
+            left: pileLeft, 
+            top: pileTop - 40,
+            width: '180px'
+          }}
+        >
+          <span
+            className="mold-art w-full"
+            style={{ 
+              aspectRatio: selectedMold.aspectRatio,
+              "--fill-color": selectedMold.fillColor, 
+              "--mold-mask": `url("${selectedMold.maskSrc}")` 
+            } as any}
+            aria-hidden="true"
+          >
+            <span
+              className="mold-art__reveal"
+              style={{ clipPath: `inset(${100 - (fillLevel * 100)}% 0 0 0)` }}
+            >
+              <span className="mold-art__fill" />
+            </span>
+            <Image
+              className="mold-art__outline"
+              src={selectedMold.outlineSrc}
+              alt=""
+              draggable={false}
+              fill
+              sizes="180px"
+              unoptimized
+            />
+          </span>
+        </div>
+      )}
       
-      {/* Palette */}
-      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-3 p-3 bg-[var(--ui-panel)] rounded-2xl backdrop-blur-md">
-        {BUCKETS.map(id => (
+      {/* Mold Palette */}
+      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-3 p-3 bg-[var(--ui-panel)] rounded-2xl backdrop-blur-md z-10">
+        {[1, 2, 3, 4, 5].map(id => (
           <button
             key={id}
             className={`w-16 h-16 rounded-xl border-2 transition-all p-1 
-              ${selectedBucket === id ? 'border-[var(--ui-accent)] bg-[rgba(255,217,138,0.12)]' : 'border-transparent bg-[rgba(255,255,255,0.07)] hover:-translate-y-1'}`}
+              ${selectedBucket === id ? 'border-[var(--sand)] bg-[rgba(255,217,138,0.12)]' : 'border-transparent bg-[rgba(255,255,255,0.07)] hover:-translate-y-1'}`}
             onClick={() => {
               if (mode === 'carrying') return;
               setSelectedBucket(id);

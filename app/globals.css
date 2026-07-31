@@ -29,3 +29,230 @@ body {
   height: 100vh;
   touch-action: none;
 }
+
+/* Mold CSS from user's original commit */
+:root {
+  --sand: #ffd98a;
+  --ink: #f5ead8;
+  --ink-dim: #b8a88e;
+  --line: rgba(255, 255, 255, 0.1);
+  --panel: rgba(20, 16, 30, 0.55);
+}
+
+.mold-card {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.055), transparent 42%),
+    var(--panel);
+  box-shadow: 0 18px 45px rgba(6, 3, 16, 0.2);
+  backdrop-filter: blur(14px);
+  transition:
+    border-color 240ms ease,
+    transform 240ms ease;
+  pointer-events: auto;
+}
+
+.mold-card:hover {
+  border-color: rgba(255, 217, 138, 0.32);
+  transform: translateY(-3px);
+}
+
+.mold-card.is-complete {
+  border-color: rgba(255, 217, 138, 0.58);
+}
+
+.mold-card__heading,
+.mold-card__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.mold-card__heading {
+  padding: 22px 22px 0;
+}
+
+.mold-card__heading h2 {
+  margin: 0;
+  font-size: 27px;
+  font-weight: 400;
+  letter-spacing: -0.025em;
+}
+
+.mold-card__number {
+  color: rgba(245, 234, 216, 0.35);
+  font-family: var(--ui-font-utility);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+
+.mold-stage {
+  position: relative;
+  display: flex;
+  width: calc(100% - 24px);
+  min-height: 286px;
+  margin: 2px 12px 0;
+  padding: 18px 20px 42px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.mold-stage:focus-visible {
+  outline: 2px solid var(--sand);
+  outline-offset: -3px;
+}
+
+.mold-stage::before {
+  position: absolute;
+  right: 10%;
+  bottom: 36px;
+  left: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(245, 234, 216, 0.25), transparent);
+  content: "";
+}
+
+.mold-stage__hint {
+  position: absolute;
+  right: 0;
+  bottom: 9px;
+  left: 0;
+  color: var(--ink-dim);
+  font-family: var(--ui-font-utility);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.mold-art {
+  position: relative;
+  display: block;
+  width: min(100%, 245px);
+  max-height: 220px;
+  filter: drop-shadow(0 14px 20px rgba(5, 2, 14, 0.25));
+  pointer-events: none;
+}
+
+.mold-art__outline,
+.mold-art__fill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.mold-art__outline {
+  z-index: 2;
+  object-fit: contain;
+  opacity: 0.86;
+  transition:
+    filter 240ms ease,
+    opacity 240ms ease;
+}
+
+.mold-art__reveal {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  transition: clip-path 80ms linear;
+}
+
+.mold-art__fill {
+  top: auto;
+  bottom: 0;
+  height: 100%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.3) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 68% 62%, rgba(119, 71, 29, 0.2) 0 1px, transparent 1.5px),
+    var(--fill-color);
+  background-size: 16px 19px, 21px 24px, auto;
+  -webkit-mask-image: var(--mold-mask);
+  mask-image: var(--mold-mask);
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+.mold-art__fill::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 12px;
+  background: linear-gradient(180deg, rgba(255, 249, 216, 0.5), transparent);
+  content: "";
+}
+
+.mold-card.is-complete .mold-art__outline {
+  filter: drop-shadow(0 0 9px rgba(255, 217, 138, 0.28));
+  opacity: 1;
+}
+
+.mold-card__footer {
+  min-height: 78px;
+  padding: 0 22px 20px;
+  align-items: flex-end;
+}
+
+.mold-card__footer p {
+  max-width: 29ch;
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.45;
+}
+
+.reset-button {
+  flex: none;
+  padding: 0 0 2px;
+  border: 0;
+  border-bottom: 1px solid rgba(245, 234, 216, 0.32);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--ui-font-utility);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.reset-button:disabled {
+  border-color: transparent;
+  cursor: default;
+  opacity: 0.25;
+}
+
+.reset-button:focus-visible {
+  outline: 2px solid var(--sand);
+  outline-offset: 4px;
+}
+
+.mold-progress {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mold-progress span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--sand);
+  box-shadow: 0 0 12px rgba(255, 217, 138, 0.42);
+  transition: width 80ms linear;
+}

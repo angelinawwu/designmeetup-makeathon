@@ -24,6 +24,8 @@ export type FillingMoldProps = {
   aspectRatio: string;
   fillColor: string;
   fillDurationMs?: number;
+  onFilled?: () => void;
+  onReset?: () => void;
 };
 
 export function FillingMold({
@@ -34,6 +36,8 @@ export function FillingMold({
   aspectRatio,
   fillColor,
   fillDurationMs = 2600,
+  onFilled,
+  onReset,
 }: FillingMoldProps) {
   const [progress, setProgress] = useState(0);
   const [isFilling, setIsFilling] = useState(false);
@@ -57,7 +61,8 @@ export function FillingMold({
   const reset = useCallback(() => {
     setIsFilling(false);
     updateProgress(0);
-  }, [updateProgress]);
+    onReset?.();
+  }, [updateProgress, onReset]);
 
   useEffect(() => {
     if (!isFilling) {
@@ -74,9 +79,10 @@ export function FillingMold({
 
       const elapsed = time - previousTime;
       previousTime = time;
+      const prevProgress = progressRef.current;
       const nextProgress = Math.min(
         100,
-        progressRef.current + (elapsed / fillDurationMs) * 100,
+        prevProgress + (elapsed / fillDurationMs) * 100,
       );
 
       updateProgress(nextProgress);
@@ -85,6 +91,9 @@ export function FillingMold({
         animationFrame = requestAnimationFrame(fill);
       } else {
         setIsFilling(false);
+        if (prevProgress < 100) {
+            onFilled?.();
+        }
       }
     };
 
