@@ -379,12 +379,12 @@ export default function SandcastleBuilder() {
         </button>
       </div>
 
-      <div className="absolute bottom-28 left-1/2 -translate-x-1/2 italic text-[var(--ink-dim)] pointer-events-none text-center opacity-80 z-20">
+      {/* <div className="absolute bottom-28 left-1/2 -translate-x-1/2 italic text-[var(--ink-dim)] pointer-events-none text-center opacity-80 z-20">
         {mode === 'idle' && !selectedBucket && 'choose a bucket to begin'}
         {mode === 'idle' && selectedBucket && 'hold on the sand pile to fill your bucket'}
         {mode === 'scooping' && 'keep scooping…'}
         {mode === 'carrying' && 'click anywhere on the beach to drop it'}
-      </div>
+      </div> */}
 
       {/* CSS Animation over sand pile */}
       {selectedMold && (mode === 'scooping' || (mode === 'idle' && fillLevel > 0)) && (
