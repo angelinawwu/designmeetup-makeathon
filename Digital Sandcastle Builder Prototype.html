@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tideline — build what the sea takes back</title>
+<style>
+  /* ============================================================
+     UI SHELL — visual tokens live in :root; canvas tokens in THEME
+     ============================================================ */
+  :root {
+    --ui-font: 'Georgia', serif;
+    --ui-font-utility: 'Courier New', monospace;
+    --ui-text: #f5ead8;
+    --ui-text-dim: #b8a88e;
+    --ui-panel: rgba(20, 16, 30, 0.55);
+    --ui-accent: #ffd98a;
+    --ui-danger: #ff9d7a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #1a1430; }
+  canvas#scene { display: block; width: 100vw; height: 100vh; touch-action: none; }
+
+  /* --- HUD --- */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; pointer-events: none;
+    font-family: var(--ui-font); color: var(--ui-text);
+  }
+  #hud h1 { font-size: 18px; font-weight: normal; letter-spacing: 0.12em; opacity: 0.9; }
+  #hud h1 em { font-style: italic; color: var(--ui-accent); }
+
+  /* --- Tide gauge --- */
+  #tide-gauge {
+    width: 180px; height: 8px; border-radius: 4px;
+    background: rgba(255,255,255,0.12); overflow: hidden;
+  }
+  #tide-fill {
+    height: 100%; width: 0%;
+    background: var(--ui-accent);
+    transition: width 0.4s linear, background 0.4s;
+  }
+  #tide-label {
+    font-family: var(--ui-font-utility); font-size: 10px;
+    letter-spacing: 0.15em; color: var(--ui-text-dim);
+    text-transform: uppercase; margin-bottom: 4px; text-align: right;
+  }
+
+  /* --- Mold palette --- */
+  #palette {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 10px; padding: 10px 14px;
+    background: var(--ui-panel); border-radius: 16px;
+    backdrop-filter: blur(8px);
+  }
+  .mold-btn {
+    width: 58px; height: 58px; border: 2px solid transparent; border-radius: 12px;
+    background: rgba(255,255,255,0.07); cursor: pointer; padding: 6px;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .mold-btn:hover { transform: translateY(-2px); }
+  .mold-btn.selected { border-color: var(--ui-accent); background: rgba(255,217,138,0.12); }
+  .mold-btn:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+  .mold-btn canvas { width: 100%; height: 100%; }
+
+  /* --- Coach line (single instruction, updates by state) --- */
+  #coach {
+    position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%);
+    font-family: var(--ui-font); font-style: italic; font-size: 15px;
+    color: var(--ui-text-dim); pointer-events: none;
+    transition: opacity 0.4s; text-align: center;
+  }
+
+  /* --- Tide message overlay --- */
+  #tide-msg {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    pointer-events: none; opacity: 0; transition: opacity 1.2s;
+    font-family: var(--ui-font); font-style: italic; font-size: 28px;
+    color: var(--ui-text); text-shadow: 0 2px 20px rgba(0,0,0,0.5);
+  }
+  #tide-msg.show { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mold-btn, #tide-fill { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<div id="hud">
+  <h1>tide<em>line</em></h1>
+  <div>
+    <div id="tide-label">tide returns</div>
+    <div id="tide-gauge"><div id="tide-fill"></div></div>
+  </div>
+</div>
+
+<div id="coach"></div>
+<div id="palette"></div>
+<div id="tide-msg">the sea takes it back. build again.</div>
+
+<script>
+"use strict";
+
+/* ==================================================================
+   1. THEME — the customization surface. Reskin here, not in logic.
+   ================================================================== */
+const THEME = {
+  // scene layers (canvas gradients: [stop, color] pairs)
+  sky:      [[0, "#2b1f52"], [0.55, "#6b3f7a"], [1, "#d98a6a"]],   // dusk default
+  sea:      [[0, "#3a6d8c"], [1, "#1c3a52"]],
+  seaGlow:  "rgba(140, 235, 255, 0.25)",   // bioluminescent edge on waves
+  beach:    [[0, "#e8c896"], [1, "#c9a06a"]],
+  wetSand:  "#a98452",
+
+  // sand pile + blocks
+  pile:        "#e2bd85",
+  pileShadow:  "#c49a5e",
+  block:       "#dcb87e",
+  blockEdge:   "#a8854f",
+  blockLight:  "#f4dcae",
+  ghostValid:   "rgba(160, 255, 200, 0.45)",
+  ghostInvalid: "rgba(255, 120, 120, 0.35)",
+
+  // particle presets — swap these to change the "magic"
+  particles: {
+    pixieDust: { colors: ["#ffe9a8", "#fff6d8", "#c8f0ff", "#ffd0f0"],
+                 count: 26, speed: 90, gravity: -18, life: 1.4, size: [1.5, 3.5], twinkle: true },
+    sandScoop: { colors: ["#e2bd85", "#c49a5e", "#f0d4a0"],
+                 count: 3,  speed: 60, gravity: 160, life: 0.5, size: [1, 2.5], twinkle: false },
+    crumble:   { colors: ["#dcb87e", "#a8854f", "#f4dcae"],
+                 count: 34, speed: 130, gravity: 220, life: 1.1, size: [2, 5], twinkle: false },
+    dustTrail: { colors: ["#ffe9a8", "#c8f0ff"],
+                 count: 1,  speed: 20, gravity: -10, life: 0.8, size: [1, 2], twinkle: true },
+  },
+};
+
+/* ==================================================================
+   2. TUNING — gameplay constants
+   ================================================================== */
+const TUNING = {
+  cell: 46,             // grid cell px
+  gridCols: 9,
+  gridRows: 8,
+  scoopRate: 0.9,       // fill per second while scooping (÷ shape capacity)
+  tideDuration: 75,     // seconds until the wave comes
+  waveSpeed: 480,       // px/s wave sweep
+  beachHeightFrac: 0.34 // fraction of screen height that is beach
+};
+
+/* ==================================================================
+   3. SHAPE REGISTRY — add a mold: one entry, zero logic changes.
+   w/h in grid cells; capacity scales scoop time; draw() renders it.
+   ================================================================== */
+const SHAPES = {
+  block: { label: "Block", w: 1, h: 1, capacity: 1,
+    draw(ctx, x, y, w, h) {
+      rounded(ctx, x, y, w, h, 4); fillBlock(ctx, x, y, w, h);
+    }},
+  tower: { label: "Tower", w: 1, h: 2, capacity: 1.8,
+    draw(ctx, x, y, w, h) {
+      rounded(ctx, x, y, w, h, 4); fillBlock(ctx, x, y, w, h);
+      // crenellation notch
+      ctx.fillStyle = THEME.blockEdge;
+      ctx.fillRect(x + w * 0.4, y, w * 0.2, h * 0.06);
+    }},
+  dome: { label: "Dome", w: 1, h: 1, capacity: 0.8,
+    draw(ctx, x, y, w, h) {
+      ctx.beginPath();
+      ctx.moveTo(x, y + h);
+      ctx.arc(x + w / 2, y + h, w / 2, Math.PI, 0);
+      ctx.closePath(); fillBlock(ctx, x, y, w, h, true);
+    }},
+  arch: { label: "Arch", w: 2, h: 1, capacity: 1.6,
+    draw(ctx, x, y, w, h) {
+      ctx.beginPath();
+      ctx.rect(x, y, w, h);
+      // cutout (evenodd)
+      ctx.moveTo(x + w * 0.72, y + h);
+      ctx.arc(x + w / 2, y + h, w * 0.22, 0, Math.PI, true);
+      ctx.closePath(); fillBlock(ctx, x, y, w, h, true, "evenodd");
+    }},
+  spire: { label: "Spire", w: 1, h: 1, capacity: 0.6,
+    draw(ctx, x, y, w, h) {
+      ctx.beginPath();
+      ctx.moveTo(x + w / 2, y);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.closePath(); fillBlock(ctx, x, y, w, h, true);
+    }},
+};
+
+/* block fill/stroke helper — one place to restyle all masonry */
+function fillBlock(ctx, x, y, w, h, pathReady, fillRule) {
+  const g = ctx.createLinearGradient(x, y, x, y + h);
+  g.addColorStop(0, THEME.blockLight);
+  g.addColorStop(1, THEME.block);
+  ctx.fillStyle = g;
+  fillRule ? ctx.fill(fillRule) : ctx.fill();
+  ctx.strokeStyle = THEME.blockEdge;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+function rounded(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+}
+
+/* ==================================================================
+   4. STATE
+   ================================================================== */
+const S = {
+  mode: "idle",            // idle | scooping | carrying | tide
+  selected: null,          // shape key
+  fill: 0,                 // 0..1 mold fullness
+  pointer: { x: 0, y: 0, down: false },
+  grid: [],                // occupancy: grid[row][col] = block id | 0
+  blocks: [],              // { id, shape, col, row }
+  nextId: 1,
+  tideT: 0,                // seconds elapsed toward tide
+  wave: null,              // { x } when sweeping
+  time: 0,
+};
+for (let r = 0; r < TUNING.gridRows; r++) S.grid.push(new Array(TUNING.gridCols).fill(0));
+
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ==================================================================
+   5. LAYOUT — derived geometry (beach line, pile, build zone)
+   ================================================================== */
+const canvas = document.getElementById("scene");
+const ctx = canvas.getContext("2d");
+let W = 0, H = 0, beachY = 0, pile = {}, zone = {};
+
+function layout() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  beachY = H * (1 - TUNING.beachHeightFrac);
+  // sand pile: left side of beach
+  pile = { x: W * 0.13, y: beachY + (H - beachY) * 0.45, r: Math.min(W * 0.09, 110) };
+  // build zone: centered grid sitting on a "firm sand" line
+  const gw = TUNING.gridCols * TUNING.cell;
+  zone = {
+    x: Math.min(W * 0.36, W - gw - 24),
+    groundY: beachY + (H - beachY) * 0.52,
+    w: gw,
+  };
+}
+addEventListener("resize", layout);
+layout();
+
+/* grid <-> px */
+const cellX = c => zone.x + c * TUNING.cell;
+const cellY = r => zone.groundY - (r + 1) * TUNING.cell; // row 0 sits on ground
+function pxToCell(x, y) {
+  return {
+    col: Math.floor((x - zone.x) / TUNING.cell),
+    row: Math.floor((zone.groundY - y) / TUNING.cell),
+  };
+}
+
+/* ==================================================================
+   6. STACKING LOGIC — snap + support rule
+   ================================================================== */
+function canPlace(shapeKey, col, row) {
+  const s = SHAPES[shapeKey];
+  if (col < 0 || row < 0) return false;
+  if (col + s.w > TUNING.gridCols || row + s.h > TUNING.gridRows) return false;
+  // must be empty
+  for (let r = row; r < row + s.h; r++)
+    for (let c = col; c < col + s.w; c++)
+      if (S.grid[r][c]) return false;
+  // support: ground, or every footprint col occupied directly below
+  if (row === 0) return true;
+  for (let c = col; c < col + s.w; c++)
+    if (!S.grid[row - 1][c]) return false;
+  return true;
+}
+
+function place(shapeKey, col, row) {
+  const s = SHAPES[shapeKey];
+  const id = S.nextId++;
+  S.blocks.push({ id, shape: shapeKey, col, row });
+  for (let r = row; r < row + s.h; r++)
+    for (let c = col; c < col + s.w; c++)
+      S.grid[r][c] = id;
+  // magic on placement
+  burst("pixieDust", cellX(col) + (s.w * TUNING.cell) / 2, cellY(row + s.h - 1) + TUNING.cell / 2);
+}
+
+function removeBlock(b) {
+  const s = SHAPES[b.shape];
+  for (let r = b.row; r < b.row + s.h; r++)
+    for (let c = b.col; c < b.col + s.w; c++)
+      if (S.grid[r][c] === b.id) S.grid[r][c] = 0;
+  S.blocks = S.blocks.filter(x => x.id !== b.id);
+  burst("crumble", cellX(b.col) + (s.w * TUNING.cell) / 2, cellY(b.row + s.h - 1) + (s.h * TUNING.cell) / 2);
+}
+
+/* ==================================================================
+   7. PARTICLES — one engine, preset-driven
+   ================================================================== */
+const particles = [];
+function burst(preset, x, y) {
+  const p = THEME.particles[preset];
+  const n = reducedMotion ? Math.ceil(p.count / 3) : p.count;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const sp = p.speed * (0.4 + Math.random() * 0.8);
+    particles.push({
+      x, y,
+      vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+      g: p.gravity, life: p.life * (0.6 + Math.random() * 0.6), age: 0,
+      size: p.size[0] + Math.random() * (p.size[1] - p.size[0]),
+      color: p.colors[(Math.random() * p.colors.length) | 0],
+      twinkle: p.twinkle,
+    });
+  }
+}
+function stepParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.age += dt;
+    if (p.age > p.life) { particles.splice(i, 1); continue; }
+    p.vy += p.g * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+  }
+}
+function drawParticles() {
+  for (const p of particles) {
+    const t = p.age / p.life;
+    let alpha = 1 - t;
+    if (p.twinkle) alpha *= 0.5 + 0.5 * Math.sin(p.age * 18 + p.x);
+    ctx.globalAlpha = Math.max(alpha, 0);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ==================================================================
+   8. INPUT
+   ================================================================== */
+function overPile(x, y) {
+  const dx = x - pile.x, dy = (y - pile.y) * 1.6; // squashed ellipse
+  return dx * dx + dy * dy < pile.r * pile.r;
+}
+
+canvas.addEventListener("pointerdown", e => {
+  S.pointer.down = true;
+  updatePointer(e);
+  if (S.mode === "tide") return;
+
+  if (S.mode === "carrying") {
+    const { col, row } = pxToCell(S.pointer.x, S.pointer.y);
+    if (canPlace(S.selected, col, row)) {
+      place(S.selected, col, row);
+      S.mode = "idle"; S.fill = 0;
+      coach();
+    }
+    return;
+  }
+  if (S.selected && overPile(S.pointer.x, S.pointer.y)) {
+    S.mode = "scooping";
+    coach();
+  }
+});
+canvas.addEventListener("pointermove", e => {
+  updatePointer(e);
+  if (S.mode === "scooping" && !overPile(S.pointer.x, S.pointer.y)) {
+    S.mode = "idle"; coach(); // wandered off the pile mid-scoop
+  }
+});
+addEventListener("pointerup", () => {
+  S.pointer.down = false;
+  if (S.mode === "scooping") { S.mode = "idle"; coach(); }
+});
+addEventListener("keydown", e => {
+  if (e.key === "Escape" && S.mode === "carrying") {
+    S.mode = "idle"; S.fill = 0; coach();
+  }
+});
+function updatePointer(e) {
+  S.pointer.x = e.clientX; S.pointer.y = e.clientY;
+}
+
+/* ==================================================================
+   9. PALETTE UI — icons drawn from the same shape registry
+   ================================================================== */
+const paletteEl = document.getElementById("palette");
+for (const key of Object.keys(SHAPES)) {
+  const btn = document.createElement("button");
+  btn.className = "mold-btn";
+  btn.setAttribute("aria-label", SHAPES[key].label + " mold");
+  const icon = document.createElement("canvas");
+  icon.width = 92; icon.height = 92;
+  const ic = icon.getContext("2d");
+  const s = SHAPES[key];
+  const iw = s.w >= 2 ? 70 : 42, ih = s.h >= 2 ? 70 : 42;
+  s.draw(ic, (92 - iw) / 2, (92 - ih) / 2, iw, ih);
+  btn.appendChild(icon);
+  btn.addEventListener("click", () => {
+    if (S.mode === "carrying" || S.mode === "tide") return;
+    S.selected = key; S.fill = 0;
+    document.querySelectorAll(".mold-btn").forEach(b => b.classList.remove("selected"));
+    btn.classList.add("selected");
+    coach();
+  });
+  paletteEl.appendChild(btn);
+}
+
+/* ==================================================================
+   10. COACH — one instruction line, state-driven copy
+   ================================================================== */
+const coachEl = document.getElementById("coach");
+function coach() {
+  const lines = {
+    start:    "choose a mold to begin",
+    scoop:    "hold on the sand pile to fill your mold",
+    scooping: "keep scooping…",
+    carrying: "place it on the castle — green means it will hold",
+    tide:     "",
+  };
+  if (S.mode === "tide") coachEl.textContent = lines.tide;
+  else if (S.mode === "carrying") coachEl.textContent = lines.carrying;
+  else if (S.mode === "scooping") coachEl.textContent = lines.scooping;
+  else coachEl.textContent = S.selected ? lines.scoop : lines.start;
+}
+coach();
+
+/* ==================================================================
+   11. UPDATE
+   ================================================================== */
+const tideFillEl = document.getElementById("tide-fill");
+const tideMsgEl = document.getElementById("tide-msg");
+
+function update(dt) {
+  S.time += dt;
+
+  // scooping fills the mold
+  if (S.mode === "scooping" && S.pointer.down) {
+    const cap = SHAPES[S.selected].capacity;
+    S.fill += (TUNING.scoopRate / cap) * dt;
+    if (Math.random() < 0.6) burst("sandScoop", S.pointer.x, S.pointer.y);
+    if (S.fill >= 1) { S.fill = 1; S.mode = "carrying"; coach(); }
+  }
+
+  // dust trail while carrying
+  if (S.mode === "carrying" && Math.random() < 0.35 && !reducedMotion) {
+    burst("dustTrail", S.pointer.x + (Math.random() - 0.5) * 30, S.pointer.y + (Math.random() - 0.5) * 30);
+  }
+
+  // tide clock
+  if (S.mode !== "tide") {
+    S.tideT += dt;
+    const frac = Math.min(S.tideT / TUNING.tideDuration, 1);
+    tideFillEl.style.width = (frac * 100) + "%";
+    tideFillEl.style.background = frac > 0.8 ? "var(--ui-danger)" : "var(--ui-accent)";
+    if (frac >= 1) startTide();
+  }
+
+  // wave sweep: crumble blocks the wave front passes
+  if (S.wave) {
+    S.wave.x -= TUNING.waveSpeed * dt;
+    for (const b of [...S.blocks]) {
+      if (cellX(b.col) + SHAPES[b.shape].w * TUNING.cell > S.wave.x) removeBlock(b);
+    }
+    if (S.wave.x < -W * 0.3) endTide();
+  }
+
+  stepParticles(dt);
+}
+
+function startTide() {
+  S.mode = "tide";
+  S.fill = 0;
+  S.wave = { x: W * 1.15 };
+  tideMsgEl.classList.add("show");
+  coach();
+}
+function endTide() {
+  S.wave = null;
+  S.tideT = 0;
+  S.mode = "idle";
+  tideMsgEl.classList.remove("show");
+  coach();
+}
+
+/* ==================================================================
+   12. RENDER — layered: sky, sea, beach, pile, castle, ghost, wave, fx
+   ================================================================== */
+function gradient(stops, x0, y0, x1, y1) {
+  const g = ctx.createLinearGradient(x0, y0, x1, y1);
+  for (const [t, c] of stops) g.addColorStop(t, c);
+  return g;
+}
+
+function render() {
+  // sky
+  ctx.fillStyle = gradient(THEME.sky, 0, 0, 0, beachY);
+  ctx.fillRect(0, 0, W, beachY);
+
+  // sea strip behind beach horizon
+  const seaH = 34;
+  ctx.fillStyle = gradient(THEME.sea, 0, beachY - seaH, 0, beachY);
+  ctx.fillRect(0, beachY - seaH, W, seaH);
+  // glow line
+  ctx.fillStyle = THEME.seaGlow;
+  ctx.fillRect(0, beachY - 3, W, 3);
+
+  // beach
+  ctx.fillStyle = gradient(THEME.beach, 0, beachY, 0, H);
+  ctx.fillRect(0, beachY, W, H - beachY);
+
+  // wet sand band at waterline
+  ctx.fillStyle = THEME.wetSand;
+  ctx.globalAlpha = 0.35;
+  ctx.fillRect(0, beachY, W, 14);
+  ctx.globalAlpha = 1;
+
+  drawPile();
+  drawCastle();
+  if (S.mode === "carrying") drawGhost();
+  if (S.wave) drawWave();
+  drawParticles();
+  if (S.mode === "scooping" || S.mode === "carrying") drawFillMeter();
+}
+
+function drawPile() {
+  ctx.fillStyle = THEME.pileShadow;
+  ctx.beginPath();
+  ctx.ellipse(pile.x, pile.y + pile.r * 0.42, pile.r * 1.1, pile.r * 0.3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = THEME.pile;
+  ctx.beginPath();
+  ctx.ellipse(pile.x, pile.y, pile.r, pile.r * 0.62, 0, Math.PI, 0);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawCastle() {
+  // firm-sand base line under the build zone
+  ctx.strokeStyle = "rgba(0,0,0,0.12)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(zone.x - 10, zone.groundY);
+  ctx.lineTo(zone.x + zone.w + 10, zone.groundY);
+  ctx.stroke();
+
+  for (const b of S.blocks) {
+    const s = SHAPES[b.shape];
+    s.draw(ctx, cellX(b.col), cellY(b.row + s.h - 1), s.w * TUNING.cell, s.h * TUNING.cell);
+  }
+}
+
+function drawGhost() {
+  const s = SHAPES[S.selected];
+  const { col, row } = pxToCell(S.pointer.x, S.pointer.y);
+  const inZone = col >= 0 && col + s.w <= TUNING.gridCols && row >= 0;
+  if (inZone) {
+    const ok = canPlace(S.selected, col, row);
+    ctx.save();
+    ctx.globalAlpha = 0.8;
+    s.draw(ctx, cellX(col), cellY(row + s.h - 1), s.w * TUNING.cell, s.h * TUNING.cell);
+    ctx.restore();
+    ctx.fillStyle = ok ? THEME.ghostValid : THEME.ghostInvalid;
+    ctx.fillRect(cellX(col), cellY(row + s.h - 1), s.w * TUNING.cell, s.h * TUNING.cell);
+  } else {
+    // free-floating preview follows pointer
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    s.draw(ctx, S.pointer.x - (s.w * TUNING.cell) / 2, S.pointer.y - (s.h * TUNING.cell) / 2,
+           s.w * TUNING.cell, s.h * TUNING.cell);
+    ctx.restore();
+  }
+}
+
+function drawWave() {
+  const x = S.wave.x;
+  ctx.fillStyle = gradient(THEME.sea, x, 0, x + 300, 0);
+  ctx.globalAlpha = 0.92;
+  ctx.beginPath();
+  ctx.moveTo(x, H);
+  ctx.quadraticCurveTo(x - 60, beachY + 40, x + 40, beachY + 10);
+  ctx.lineTo(W, beachY + 10);
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  // foam edge
+  ctx.strokeStyle = THEME.seaGlow;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(x, H);
+  ctx.quadraticCurveTo(x - 60, beachY + 40, x + 40, beachY + 10);
+  ctx.stroke();
+}
+
+function drawFillMeter() {
+  const mx = pile.x, my = pile.y - pile.r * 0.9;
+  const w = 74, h = 8;
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  ctx.beginPath(); ctx.roundRect(mx - w / 2, my, w, h, 4); ctx.fill();
+  ctx.fillStyle = THEME.blockLight;
+  ctx.beginPath(); ctx.roundRect(mx - w / 2, my, w * S.fill, h, 4); ctx.fill();
+}
+
+/* ==================================================================
+   13. LOOP
+   ================================================================== */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
