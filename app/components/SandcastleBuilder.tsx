@@ -322,7 +322,7 @@ export default function SandcastleBuilder() {
       )}
       
       {/* Mold Palette */}
-      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-3 p-3 bg-[var(--ui-panel)] rounded-2xl backdrop-blur-md z-10">
+      <div className="absolute top-5 left-1/2 -translate-x-1/2 flex gap-3 p-3 bg-[var(--ui-panel)] rounded-2xl backdrop-blur-md z-10">
         {[1, 2, 3, 4, 5].map(id => (
           <button
             key={id}
