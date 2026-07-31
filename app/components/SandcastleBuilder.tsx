@@ -31,7 +31,6 @@ export default function SandcastleBuilder() {
   const [fillLevel, setFillLevel] = useState(0);
 
   // Onboarding Tutorial State
-  const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(true); // Default true for SSR safety
   const [step1Completed, setStep1Completed] = useState(false); // Select bucket
   const [step2Completed, setStep2Completed] = useState(false); // Fill bucket
   const [step3Completed, setStep3Completed] = useState(false); // Drop shape
@@ -66,11 +65,7 @@ export default function SandcastleBuilder() {
     });
   }, []);
 
-  // Check onboarding completed on mount
-  useEffect(() => {
-    const completed = localStorage.getItem('sandcastle_onboarding_completed') === 'true';
-    setIsOnboardingCompleted(completed);
-  }, []);
+
 
   // Initialize Physics & Canvas
   useEffect(() => {
@@ -205,9 +200,7 @@ export default function SandcastleBuilder() {
           const next = f + (0.4 * dt); // scoop rate (takes ~2.5s)
           if (next >= 1) {
             setMode('carrying');
-            if (!isOnboardingCompleted) {
-              setStep2Completed(true);
-            }
+            setStep2Completed(true);
             return 1;
           }
           return next;
@@ -218,7 +211,7 @@ export default function SandcastleBuilder() {
     };
     frameId = requestAnimationFrame(update);
     return () => cancelAnimationFrame(frameId);
-  }, [mode, isOnboardingCompleted]);
+  }, [mode]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     mouseRef.current.down = true;
@@ -246,13 +239,7 @@ export default function SandcastleBuilder() {
         setFillLevel(0);
         setSelectedBucket(null);
 
-        if (!isOnboardingCompleted) {
-          setStep3Completed(true);
-          setTimeout(() => {
-            setIsOnboardingCompleted(true);
-            localStorage.setItem('sandcastle_onboarding_completed', 'true');
-          }, 1000);
-        }
+        setStep3Completed(true);
       }
       return;
     }
@@ -319,7 +306,7 @@ export default function SandcastleBuilder() {
       />
 
       {/* Onboarding / Tutorial Card */}
-      <div className={`onboarding-card ${isOnboardingCompleted ? 'is-hidden' : ''}`}>
+      <div className="onboarding-card">
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.08)] pb-2.5">
             <span className="font-bold text-xs uppercase tracking-wider text-[var(--sand)] font-sans">Getting Started</span>
@@ -433,9 +420,11 @@ export default function SandcastleBuilder() {
               setSelectedBucket(id);
               setMode('idle');
               setFillLevel(0);
-              if (!isOnboardingCompleted) {
-                setStep1Completed(true);
+              if (step3Completed) {
+                setStep2Completed(false);
+                setStep3Completed(false);
               }
+              setStep1Completed(true);
             }}
           >
             <Image
