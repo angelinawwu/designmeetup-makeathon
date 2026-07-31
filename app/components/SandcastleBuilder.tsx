@@ -139,7 +139,7 @@ export default function SandcastleBuilder() {
       // Draw Pile
       const pileImg = images.pile;
       if (pileImg) {
-        const pileWidth = pile.r * 2.2;
+        const pileWidth = pile.r * 2.2 * 1.75;
         const pileHeight = (pileImg.height / pileImg.width) * pileWidth;
         ctx.drawImage(pileImg, pile.x - pileWidth / 2, pile.y - pileHeight / 2, pileWidth, pileHeight);
       }
