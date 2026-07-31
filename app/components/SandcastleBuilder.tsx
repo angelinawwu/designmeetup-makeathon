@@ -45,7 +45,7 @@ export default function SandcastleBuilder() {
   useEffect(() => {
     const loadedImages: Record<string, HTMLImageElement> = {};
     let loadedCount = 0;
-    const totalToLoad = 10;
+    const totalToLoad = 11;
 
     [1, 2, 3, 4, 5].forEach(id => {
       const sandImg = new window.Image();
@@ -63,6 +63,14 @@ export default function SandcastleBuilder() {
         if (loadedCount === totalToLoad) setImages(loadedImages);
       };
     });
+
+    const pileImg = new window.Image();
+    pileImg.src = '/image 12.png';
+    pileImg.onload = () => {
+      loadedImages['pile'] = pileImg;
+      loadedCount++;
+      if (loadedCount === totalToLoad) setImages(loadedImages);
+    };
   }, []);
 
 
@@ -129,15 +137,12 @@ export default function SandcastleBuilder() {
       ctx.clearRect(0, 0, w, h);
 
       // Draw Pile
-      ctx.fillStyle = "#c49a5e"; // pileShadow
-      ctx.beginPath();
-      ctx.ellipse(pile.x, pile.y + pile.r * 0.42, pile.r * 1.1, pile.r * 0.3, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#e2bd85"; // pile
-      ctx.beginPath();
-      ctx.ellipse(pile.x, pile.y, pile.r, pile.r * 0.62, 0, Math.PI, 0);
-      ctx.closePath();
-      ctx.fill();
+      const pileImg = images.pile;
+      if (pileImg) {
+        const pileWidth = pile.r * 2.2;
+        const pileHeight = (pileImg.height / pileImg.width) * pileWidth;
+        ctx.drawImage(pileImg, pile.x - pileWidth / 2, pile.y - pileHeight / 2, pileWidth, pileHeight);
+      }
 
       // Draw Shapes
       shapesRef.current.forEach(body => {
