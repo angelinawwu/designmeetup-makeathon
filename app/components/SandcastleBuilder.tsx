@@ -5,11 +5,11 @@ import Matter from 'matter-js';
 import Image from 'next/image';
 
 const THEME = {
-  sky:      [[0, "#2b1f52"], [0.55, "#6b3f7a"], [1, "#d98a6a"]] as [number, string][],
-  sea:      [[0, "#3a6d8c"], [1, "#1c3a52"]] as [number, string][],
-  seaGlow:  "rgba(140, 235, 255, 0.25)",
-  beach:    [[0, "#e8c896"], [1, "#c9a06a"]] as [number, string][],
-  wetSand:  "#a98452",
+  sky: [[0, "#2b1f52"], [0.55, "#6b3f7a"], [1, "#d98a6a"]] as [number, string][],
+  sea: [[0, "#3a6d8c"], [1, "#1c3a52"]] as [number, string][],
+  seaGlow: "rgba(140, 235, 255, 0.25)",
+  beach: [[0, "#e8c896"], [1, "#c9a06a"]] as [number, string][],
+  wetSand: "#a98452",
 };
 
 const MOLD_DATA = {
@@ -20,27 +20,37 @@ const MOLD_DATA = {
   5: { fillColor: "#f0c77a", outlineSrc: "/molds/outlines/house.svg", maskSrc: "/molds/masks/house.png", aspectRatio: "758 / 559" }, // House
 } as Record<number, { fillColor: string, outlineSrc: string, maskSrc: string, aspectRatio: string }>;
 
+const PART_DISPLAY_WIDTH = 180;
+
 export default function SandcastleBuilder() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Matter.Engine | null>(null);
-  
+
   const [selectedBucket, setSelectedBucket] = useState<number | null>(null);
   const [mode, setMode] = useState<'idle' | 'scooping' | 'carrying'>('idle');
   const [fillLevel, setFillLevel] = useState(0);
   const [knockedOver, setKnockedOver] = useState(false);
-  
+
+  // Onboarding Tutorial State
+  const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(true); // Default true for SSR safety
+  const [step1Completed, setStep1Completed] = useState(false); // Select bucket
+  const [step2Completed, setStep2Completed] = useState(false); // Fill bucket
+  const [step3Completed, setStep3Completed] = useState(false); // Drop shape
+
   const mouseRef = useRef({ x: 0, y: 0, down: false });
   const [windowSize, setWindowSize] = useState({ w: 0, h: 0 });
   const [images, setImages] = useState<Record<string, HTMLImageElement>>({});
+  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const shapesRef = useRef<any[]>([]);
   const renderLoopRef = useRef<number>(0);
   const waveActiveRef = useRef(false);
+  const hasExplodedThisLoopRef = useRef(false);
 
   // Load images
   useEffect(() => {
     const loadedImages: Record<string, HTMLImageElement> = {};
     let loadedCount = 0;
-    
+
     // We only need the Sand shapes for physics
     [1, 2, 3, 4, 5].forEach(id => {
       const sandImg = new window.Image();
@@ -53,29 +63,43 @@ export default function SandcastleBuilder() {
     });
   }, []);
 
+  // Check onboarding completed on mount
+  useEffect(() => {
+    const completed = localStorage.getItem('sandcastle_onboarding_completed') === 'true';
+    setIsOnboardingCompleted(completed);
+  }, []);
+
+  useEffect(() => {
+    const bgImg = new window.Image();
+    bgImg.src = '/bg.png';
+    bgImg.onload = () => {
+      setBgImage(bgImg);
+    };
+  }, []);
+
   // Initialize Physics & Canvas
   useEffect(() => {
     if (!canvasRef.current) return;
-    
+
     const engine = Matter.Engine.create();
     engine.gravity.y = 1.2;
     engineRef.current = engine;
-    
+
     const handleResize = () => {
       if (!canvasRef.current) return;
       const w = window.innerWidth;
       const h = window.innerHeight;
       setWindowSize({ w, h });
-      
+
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvasRef.current.width = w * dpr;
       canvasRef.current.height = h * dpr;
       const ctx = canvasRef.current.getContext('2d');
       if (ctx) ctx.scale(dpr, dpr);
-      
+
       const beachY = h * 0.66;
       Matter.World.clear(engine.world, false);
-      const ground = Matter.Bodies.rectangle(w / 2, h + 50, w * 2, 100, { 
+      const ground = Matter.Bodies.rectangle(w / 2, h + 50, w * 2, 100, {
         isStatic: true,
         friction: 0.8
       });
@@ -86,13 +110,13 @@ export default function SandcastleBuilder() {
       Matter.World.add(engine.world, [ground, firmSand]);
       Matter.World.add(engine.world, shapesRef.current);
     };
-    
+
     window.addEventListener('resize', handleResize);
     handleResize();
-    
+
     const runner = Matter.Runner.create();
     Matter.Runner.run(runner, engine);
-    
+
     return () => {
       window.removeEventListener('resize', handleResize);
       Matter.Runner.stop(runner);
@@ -102,44 +126,22 @@ export default function SandcastleBuilder() {
 
   // Render Loop
   useEffect(() => {
-    if (!canvasRef.current || Object.keys(images).length === 0) return;
+    if (!canvasRef.current || Object.keys(images).length === 0 || !bgImage) return;
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
-    
+
     const render = () => {
       const { w, h } = windowSize;
       if (w === 0 || h === 0) return;
       const beachY = h * 0.66;
       const pile = { x: w * 0.13, y: beachY + (h - beachY) * 0.45, r: Math.min(w * 0.09, 110) };
-      
+
       if (waveActiveRef.current) {
         ctx.clearRect(0, 0, w, h);
       } else {
-        // Backgrounds
-        const skyGrad = ctx.createLinearGradient(0, 0, 0, beachY);
-        THEME.sky.forEach(([t, c]) => skyGrad.addColorStop(t, c as string));
-        ctx.fillStyle = skyGrad;
-        ctx.fillRect(0, 0, w, beachY);
-        
-        const seaH = 34;
-        const seaGrad = ctx.createLinearGradient(0, beachY - seaH, 0, beachY);
-        THEME.sea.forEach(([t, c]) => seaGrad.addColorStop(t, c as string));
-        ctx.fillStyle = seaGrad;
-        ctx.fillRect(0, beachY - seaH, w, seaH);
-        
-        ctx.fillStyle = THEME.seaGlow;
-        ctx.fillRect(0, beachY - 3, w, 3);
-        
-        const beachGrad = ctx.createLinearGradient(0, beachY, 0, h);
-        THEME.beach.forEach(([t, c]) => beachGrad.addColorStop(t, c as string));
-        ctx.fillStyle = beachGrad;
-        ctx.fillRect(0, beachY, w, h - beachY);
-        
-        ctx.fillStyle = THEME.wetSand;
-        ctx.globalAlpha = 0.35;
-        ctx.fillRect(0, beachY, w, 14);
-        ctx.globalAlpha = 1;
-        
+        // Background Image
+        ctx.drawImage(bgImage, 0, 0, w, h);
+
         // Draw Pile
         ctx.fillStyle = "#c49a5e"; // pileShadow
         ctx.beginPath();
@@ -159,13 +161,13 @@ export default function SandcastleBuilder() {
           ctx.save();
           ctx.translate(body.position.x, body.position.y);
           ctx.rotate(body.angle);
-          const displayWidth = 100;
+          const displayWidth = PART_DISPLAY_WIDTH;
           const displayHeight = (img.height / img.width) * displayWidth;
           ctx.drawImage(img, -displayWidth / 2, -displayHeight / 2, displayWidth, displayHeight);
           ctx.restore();
         }
       });
-      
+
       // Draw ghost if carrying
       if (mode === 'carrying' && selectedBucket) {
         const img = images[`sand-${selectedBucket}`];
@@ -178,23 +180,23 @@ export default function SandcastleBuilder() {
           ctx.restore();
         }
       }
-      
+
       renderLoopRef.current = requestAnimationFrame(render);
     };
-    
+
     renderLoopRef.current = requestAnimationFrame(render);
     return () => cancelAnimationFrame(renderLoopRef.current);
-  }, [windowSize, images, mode, fillLevel, selectedBucket]);
+  }, [windowSize, images, mode, fillLevel, selectedBucket, bgImage]);
 
   // Update Scooping logic
   useEffect(() => {
     let lastTime = performance.now();
     let frameId: number;
-    
+
     const update = (now: number) => {
       const dt = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
-      
+
       if (mode === 'scooping' && mouseRef.current.down) {
         setFillLevel(f => {
           const next = f + (0.4 * dt); // scoop rate (takes ~2.5s)
@@ -205,7 +207,7 @@ export default function SandcastleBuilder() {
           return next;
         });
       }
-      
+
       frameId = requestAnimationFrame(update);
     };
     frameId = requestAnimationFrame(update);
@@ -216,22 +218,22 @@ export default function SandcastleBuilder() {
     mouseRef.current.down = true;
     mouseRef.current.x = e.clientX;
     mouseRef.current.y = e.clientY;
-    
+
     if (mode === 'carrying' && selectedBucket && engineRef.current) {
       const img = images[`sand-${selectedBucket}`];
       if (img) {
         const displayWidth = 100;
         const displayHeight = (img.height / img.width) * displayWidth;
-        
+
         const body = Matter.Bodies.rectangle(e.clientX, e.clientY, displayWidth * 0.8, displayHeight * 0.9, {
           friction: 0.8,
           restitution: 0.1,
           density: 0.04,
           label: selectedBucket.toString()
         });
-        
+
         Matter.Body.setInertia(body, Infinity); // prevent rotation for clean stacking
-        
+
         shapesRef.current.push(body);
         Matter.World.add(engineRef.current.world, body);
         setMode('idle');
@@ -240,12 +242,12 @@ export default function SandcastleBuilder() {
       }
       return;
     }
-    
+
     const { w, h } = windowSize;
-    
+
     // Increase hit detection area to the entire bottom-left quadrant so they can click the bucket animation itself
     const isOverPileArea = e.clientX < w * 0.35 && e.clientY > h * 0.3;
-    
+
     if (selectedBucket && isOverPileArea) {
       setMode('scooping');
     }
@@ -271,8 +273,19 @@ export default function SandcastleBuilder() {
   const handleKnockOver = () => {
     setKnockedOver(true);
     waveActiveRef.current = true;
-    
-    setTimeout(() => {
+  };
+
+  const handleTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const video = e.currentTarget;
+
+    // Reset when the video loops back
+    if (video.currentTime < 3.0) {
+      hasExplodedThisLoopRef.current = false;
+    }
+
+    if (video.currentTime >= 3.5 && !hasExplodedThisLoopRef.current) {
+      hasExplodedThisLoopRef.current = true;
+
       if (engineRef.current) {
         shapesRef.current.forEach(body => {
           Matter.Body.setStatic(body, false);
@@ -283,41 +296,42 @@ export default function SandcastleBuilder() {
           });
         });
       }
-    }, 3500);
+    }
   };
 
   return (
     <div className="relative w-full h-full overflow-hidden">
       {knockedOver && (
-        <video 
+        <video
           className="absolute inset-0 w-full h-full object-cover"
-          src="/Stylized Wave Loop.mp4" 
-          autoPlay 
-          loop 
-          muted 
-          playsInline 
+          src="/Stylized Wave Loop.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          onTimeUpdate={handleTimeUpdate}
         />
       )}
-      
-      <canvas 
+
+      <canvas
         ref={canvasRef}
         className="absolute inset-0 block w-full h-full cursor-crosshair z-0"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       />
-      
+
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-4 pointer-events-none text-[var(--ui-text)] z-10">
         <h1 className="text-lg tracking-widest opacity-90 font-[Georgia]">tide<em className="italic text-[var(--sand)] font-[Georgia]">line</em></h1>
-        
+
         <button
-          className="pointer-events-auto px-4 py-2 bg-[var(--ui-danger)] text-[#1a1430] font-bold rounded-lg uppercase tracking-wider text-sm transition-all hover:scale-105 active:scale-95"
+          className="pointer-events-auto px-4 py-2 bg-[var(--ui-danger)] text-[#1a1430] rounded-lg uppercase tracking-wider text-sm transition-all hover:scale-105 active:scale-95"
           onClick={handleKnockOver}
         >
           Knock Over
         </button>
       </div>
-      
+
       <div className="absolute bottom-28 left-1/2 -translate-x-1/2 italic text-[var(--ink-dim)] pointer-events-none text-center opacity-80 z-10 font-[Georgia]">
         {mode === 'idle' && !selectedBucket && !knockedOver && 'choose a bucket to begin'}
         {mode === 'idle' && selectedBucket && !knockedOver && 'hold on the sand pile to fill your bucket'}
@@ -327,20 +341,20 @@ export default function SandcastleBuilder() {
 
       {/* CSS Animation over sand pile */}
       {selectedMold && (mode === 'scooping' || (mode === 'idle' && fillLevel > 0)) && (
-        <div 
+        <div
           className="absolute z-10 pointer-events-none -translate-x-1/2 -translate-y-full"
-          style={{ 
-            left: pileLeft, 
+          style={{
+            left: pileLeft,
             top: pileTop - 40,
             width: '180px'
           }}
         >
           <span
             className="mold-art w-full"
-            style={{ 
+            style={{
               aspectRatio: selectedMold.aspectRatio,
-              "--fill-color": selectedMold.fillColor, 
-              "--mold-mask": `url("${selectedMold.maskSrc}")` 
+              "--fill-color": selectedMold.fillColor,
+              "--mold-mask": `url("${selectedMold.maskSrc}")`
             } as any}
             aria-hidden="true"
           >
@@ -362,7 +376,7 @@ export default function SandcastleBuilder() {
           </span>
         </div>
       )}
-      
+
       {/* Mold Palette */}
       {!knockedOver && (
         <div className="absolute top-5 left-1/2 -translate-x-1/2 flex gap-3 p-3 bg-[var(--ui-panel)] rounded-2xl backdrop-blur-md z-10">
