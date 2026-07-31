@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Tideline",
+  title: "Sand castle simulator",
   description: "build what the sea takes back",
   icons: {
     icon: "/Sand-2.png",
