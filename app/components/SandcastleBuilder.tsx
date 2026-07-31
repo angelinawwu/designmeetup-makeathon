@@ -289,11 +289,20 @@ export default function SandcastleBuilder() {
   const handleKnockOverRef = useRef(handleKnockOver);
   handleKnockOverRef.current = handleKnockOver;
 
-  // Automatically knock over the castle every 15 seconds
+  const KNOCKOVER_INTERVAL = 15;
+  const [knockoverCountdown, setKnockoverCountdown] = useState(KNOCKOVER_INTERVAL);
+
+  // Automatically knock over the castle every 15 seconds, ticking a visible countdown
   useEffect(() => {
     const interval = setInterval(() => {
-      handleKnockOverRef.current();
-    }, 15000);
+      setKnockoverCountdown(prev => {
+        if (prev <= 1) {
+          handleKnockOverRef.current();
+          return KNOCKOVER_INTERVAL;
+        }
+        return prev - 1;
+      });
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -362,9 +371,30 @@ export default function SandcastleBuilder() {
             </div>
           </div>
 
-          <p className="text-[11px] text-[var(--ink-dim)] italic leading-tight border-t border-[rgba(255,255,255,0.08)] pt-2.5">
-            Every 15 seconds the castle will be knocked over.
-          </p>
+          <div
+            className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 border transition-colors duration-300 ${
+              knockoverCountdown <= 5
+                ? 'bg-[rgba(255,157,122,0.14)] border-[rgba(255,157,122,0.45)]'
+                : 'bg-[rgba(255,217,138,0.08)] border-[rgba(255,217,138,0.25)]'
+            }`}
+          >
+            <p
+              className={`text-xs font-semibold leading-tight ${
+                knockoverCountdown <= 5 ? 'text-[var(--ui-danger)]' : 'text-[var(--sand)]'
+              }`}
+            >
+              ⚠ Every 15s the castle gets knocked over!
+            </p>
+            <span
+              className={`w-8 h-8 rounded-full flex items-center justify-center border-2 text-sm font-mono font-bold shrink-0 transition-colors duration-300 ${
+                knockoverCountdown <= 5
+                  ? 'border-[var(--ui-danger)] text-[var(--ui-danger)] animate-pulse'
+                  : 'border-[var(--sand)] text-[var(--sand)]'
+              }`}
+            >
+              {knockoverCountdown}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -373,7 +403,10 @@ export default function SandcastleBuilder() {
 
         <button
           className="pointer-events-auto px-4 py-2 bg-[var(--ui-accent)] text-[#1a1430] rounded-lg uppercase tracking-wider text-sm transition-all hover:scale-105 active:scale-95 shadow-lg"
-          onClick={handleKnockOver}
+          onClick={() => {
+            handleKnockOver();
+            setKnockoverCountdown(KNOCKOVER_INTERVAL);
+          }}
         >
           Knock Over
         </button>
