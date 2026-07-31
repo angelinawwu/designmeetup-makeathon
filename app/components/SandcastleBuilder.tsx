@@ -46,15 +46,22 @@ export default function SandcastleBuilder() {
   useEffect(() => {
     const loadedImages: Record<string, HTMLImageElement> = {};
     let loadedCount = 0;
+    const totalToLoad = 10;
 
-    // We only need the Sand shapes for physics
     [1, 2, 3, 4, 5].forEach(id => {
       const sandImg = new window.Image();
       sandImg.src = `/Sand-${id}.png`;
       sandImg.onload = () => {
         loadedImages[`sand-${id}`] = sandImg;
         loadedCount++;
-        if (loadedCount === 5) setImages(loadedImages);
+        if (loadedCount === totalToLoad) setImages(loadedImages);
+      };
+      const bucketImg = new window.Image();
+      bucketImg.src = `/Bucket-${id}.png`;
+      bucketImg.onload = () => {
+        loadedImages[`bucket-${id}`] = bucketImg;
+        loadedCount++;
+        if (loadedCount === totalToLoad) setImages(loadedImages);
       };
     });
   }, []);
@@ -151,12 +158,25 @@ export default function SandcastleBuilder() {
         }
       });
 
+      // Draw bucket cursor if idle and bucket selected
+      if (mode === 'idle' && selectedBucket) {
+        const img = images[`bucket-${selectedBucket}`];
+        if (img) {
+          ctx.save();
+          ctx.globalAlpha = 0.9;
+          const displayWidth = 85;
+          const displayHeight = (img.height / img.width) * displayWidth;
+          ctx.drawImage(img, mouseRef.current.x - displayWidth / 2, mouseRef.current.y - displayHeight / 2, displayWidth, displayHeight);
+          ctx.restore();
+        }
+      }
+
       // Draw ghost if carrying
       if (mode === 'carrying' && selectedBucket) {
         const img = images[`sand-${selectedBucket}`];
         if (img) {
           ctx.save();
-          ctx.globalAlpha = 0.6;
+          ctx.globalAlpha = 0.85;
           const displayWidth = PART_DISPLAY_WIDTH;
           const displayHeight = (img.height / img.width) * displayWidth;
           ctx.drawImage(img, mouseRef.current.x - displayWidth / 2, mouseRef.current.y - displayHeight / 2, displayWidth, displayHeight);
@@ -292,7 +312,7 @@ export default function SandcastleBuilder() {
 
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 block w-full h-full cursor-crosshair z-10"
+        className={`absolute inset-0 block w-full h-full z-10 ${selectedBucket ? 'cursor-none' : 'cursor-crosshair'}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -410,8 +430,8 @@ export default function SandcastleBuilder() {
             className={`w-16 h-16 rounded-xl border-2 transition-all p-1 
               ${selectedBucket === id ? 'border-[var(--sand)] bg-[rgba(255,217,138,0.12)]' : 'border-transparent bg-[rgba(255,255,255,0.07)] hover:-translate-y-1'}`}
             onClick={() => {
-              if (mode === 'carrying') return;
               setSelectedBucket(id);
+              setMode('idle');
               setFillLevel(0);
               if (!isOnboardingCompleted) {
                 setStep1Completed(true);
