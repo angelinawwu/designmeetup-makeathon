@@ -286,6 +286,17 @@ export default function SandcastleBuilder() {
     }
   };
 
+  const handleKnockOverRef = useRef(handleKnockOver);
+  handleKnockOverRef.current = handleKnockOver;
+
+  // Automatically knock over the castle every 15 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      handleKnockOverRef.current();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="relative w-full h-full overflow-hidden">
       <video
@@ -350,11 +361,15 @@ export default function SandcastleBuilder() {
               </div>
             </div>
           </div>
+
+          <p className="text-[11px] text-[var(--ink-dim)] italic leading-tight border-t border-[rgba(255,255,255,0.08)] pt-2.5">
+            Every 15 seconds the castle will be knocked over.
+          </p>
         </div>
       </div>
 
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-4 pointer-events-none text-[var(--ui-text)] z-20">
-        <h1 className="text-lg tracking-widest opacity-90 font-[Georgia]">tide<em className="italic text-[var(--sand)] font-[Georgia]">line</em></h1>
+        <h1 className="text-lg tracking-widest opacity-90">tide<em className="italic text-[var(--sand)]">line</em></h1>
 
         <button
           className="pointer-events-auto px-4 py-2 bg-[var(--ui-accent)] text-[#1a1430] rounded-lg uppercase tracking-wider text-sm transition-all hover:scale-105 active:scale-95 shadow-lg"
@@ -364,7 +379,7 @@ export default function SandcastleBuilder() {
         </button>
       </div>
 
-      <div className="absolute bottom-28 left-1/2 -translate-x-1/2 italic text-[var(--ink-dim)] pointer-events-none text-center opacity-80 z-20 font-[Georgia]">
+      <div className="absolute bottom-28 left-1/2 -translate-x-1/2 italic text-[var(--ink-dim)] pointer-events-none text-center opacity-80 z-20">
         {mode === 'idle' && !selectedBucket && 'choose a bucket to begin'}
         {mode === 'idle' && selectedBucket && 'hold on the sand pile to fill your bucket'}
         {mode === 'scooping' && 'keep scooping…'}

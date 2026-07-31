@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --ui-font: 'Georgia', serif;
+  --ui-font: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --ui-font-utility: 'Courier New', monospace;
   --ui-text: #f5ead8;
   --ui-text-dim: #b8a88e;
