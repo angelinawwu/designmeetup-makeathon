@@ -27,12 +27,14 @@ export default function SandcastleBuilder() {
   const [selectedBucket, setSelectedBucket] = useState<number | null>(null);
   const [mode, setMode] = useState<'idle' | 'scooping' | 'carrying'>('idle');
   const [fillLevel, setFillLevel] = useState(0);
+  const [knockedOver, setKnockedOver] = useState(false);
   
   const mouseRef = useRef({ x: 0, y: 0, down: false });
   const [windowSize, setWindowSize] = useState({ w: 0, h: 0 });
   const [images, setImages] = useState<Record<string, HTMLImageElement>>({});
   const shapesRef = useRef<any[]>([]);
   const renderLoopRef = useRef<number>(0);
+  const waveActiveRef = useRef(false);
 
   // Load images
   useEffect(() => {
@@ -110,41 +112,45 @@ export default function SandcastleBuilder() {
       const beachY = h * 0.66;
       const pile = { x: w * 0.13, y: beachY + (h - beachY) * 0.45, r: Math.min(w * 0.09, 110) };
       
-      // Backgrounds
-      const skyGrad = ctx.createLinearGradient(0, 0, 0, beachY);
-      THEME.sky.forEach(([t, c]) => skyGrad.addColorStop(t, c as string));
-      ctx.fillStyle = skyGrad;
-      ctx.fillRect(0, 0, w, beachY);
-      
-      const seaH = 34;
-      const seaGrad = ctx.createLinearGradient(0, beachY - seaH, 0, beachY);
-      THEME.sea.forEach(([t, c]) => seaGrad.addColorStop(t, c as string));
-      ctx.fillStyle = seaGrad;
-      ctx.fillRect(0, beachY - seaH, w, seaH);
-      
-      ctx.fillStyle = THEME.seaGlow;
-      ctx.fillRect(0, beachY - 3, w, 3);
-      
-      const beachGrad = ctx.createLinearGradient(0, beachY, 0, h);
-      THEME.beach.forEach(([t, c]) => beachGrad.addColorStop(t, c as string));
-      ctx.fillStyle = beachGrad;
-      ctx.fillRect(0, beachY, w, h - beachY);
-      
-      ctx.fillStyle = THEME.wetSand;
-      ctx.globalAlpha = 0.35;
-      ctx.fillRect(0, beachY, w, 14);
-      ctx.globalAlpha = 1;
-      
-      // Draw Pile
-      ctx.fillStyle = "#c49a5e"; // pileShadow
-      ctx.beginPath();
-      ctx.ellipse(pile.x, pile.y + pile.r * 0.42, pile.r * 1.1, pile.r * 0.3, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#e2bd85"; // pile
-      ctx.beginPath();
-      ctx.ellipse(pile.x, pile.y, pile.r, pile.r * 0.62, 0, Math.PI, 0);
-      ctx.closePath();
-      ctx.fill();
+      if (waveActiveRef.current) {
+        ctx.clearRect(0, 0, w, h);
+      } else {
+        // Backgrounds
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, beachY);
+        THEME.sky.forEach(([t, c]) => skyGrad.addColorStop(t, c as string));
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, w, beachY);
+        
+        const seaH = 34;
+        const seaGrad = ctx.createLinearGradient(0, beachY - seaH, 0, beachY);
+        THEME.sea.forEach(([t, c]) => seaGrad.addColorStop(t, c as string));
+        ctx.fillStyle = seaGrad;
+        ctx.fillRect(0, beachY - seaH, w, seaH);
+        
+        ctx.fillStyle = THEME.seaGlow;
+        ctx.fillRect(0, beachY - 3, w, 3);
+        
+        const beachGrad = ctx.createLinearGradient(0, beachY, 0, h);
+        THEME.beach.forEach(([t, c]) => beachGrad.addColorStop(t, c as string));
+        ctx.fillStyle = beachGrad;
+        ctx.fillRect(0, beachY, w, h - beachY);
+        
+        ctx.fillStyle = THEME.wetSand;
+        ctx.globalAlpha = 0.35;
+        ctx.fillRect(0, beachY, w, 14);
+        ctx.globalAlpha = 1;
+        
+        // Draw Pile
+        ctx.fillStyle = "#c49a5e"; // pileShadow
+        ctx.beginPath();
+        ctx.ellipse(pile.x, pile.y + pile.r * 0.42, pile.r * 1.1, pile.r * 0.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#e2bd85"; // pile
+        ctx.beginPath();
+        ctx.ellipse(pile.x, pile.y, pile.r, pile.r * 0.62, 0, Math.PI, 0);
+        ctx.closePath();
+        ctx.fill();
+      }
 
       // Draw Shapes
       shapesRef.current.forEach(body => {
@@ -262,8 +268,37 @@ export default function SandcastleBuilder() {
   const pileTop = windowSize.h * 0.66 + (windowSize.h - windowSize.h * 0.66) * 0.45;
   const selectedMold = selectedBucket ? MOLD_DATA[selectedBucket] : null;
 
+  const handleKnockOver = () => {
+    setKnockedOver(true);
+    waveActiveRef.current = true;
+    
+    setTimeout(() => {
+      if (engineRef.current) {
+        shapesRef.current.forEach(body => {
+          Matter.Body.setStatic(body, false);
+          const forceMagnitude = 0.05 * body.mass;
+          Matter.Body.applyForce(body, body.position, {
+            x: (Math.random() - 0.5) * forceMagnitude,
+            y: -Math.random() * forceMagnitude - 0.05
+          });
+        });
+      }
+    }, 3500);
+  };
+
   return (
     <div className="relative w-full h-full overflow-hidden">
+      {knockedOver && (
+        <video 
+          className="absolute inset-0 w-full h-full object-cover"
+          src="/Stylized Wave Loop.mp4" 
+          autoPlay 
+          loop 
+          muted 
+          playsInline 
+        />
+      )}
+      
       <canvas 
         ref={canvasRef}
         className="absolute inset-0 block w-full h-full cursor-crosshair z-0"
@@ -274,13 +309,20 @@ export default function SandcastleBuilder() {
       
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-4 pointer-events-none text-[var(--ui-text)] z-10">
         <h1 className="text-lg tracking-widest opacity-90 font-[Georgia]">tide<em className="italic text-[var(--sand)] font-[Georgia]">line</em></h1>
+        
+        <button
+          className="pointer-events-auto px-4 py-2 bg-[var(--ui-danger)] text-[#1a1430] font-bold rounded-lg uppercase tracking-wider text-sm transition-all hover:scale-105 active:scale-95"
+          onClick={handleKnockOver}
+        >
+          Knock Over
+        </button>
       </div>
       
       <div className="absolute bottom-28 left-1/2 -translate-x-1/2 italic text-[var(--ink-dim)] pointer-events-none text-center opacity-80 z-10 font-[Georgia]">
-        {mode === 'idle' && !selectedBucket && 'choose a bucket to begin'}
-        {mode === 'idle' && selectedBucket && 'hold on the sand pile to fill your bucket'}
-        {mode === 'scooping' && 'keep scooping…'}
-        {mode === 'carrying' && 'click anywhere on the beach to drop it'}
+        {mode === 'idle' && !selectedBucket && !knockedOver && 'choose a bucket to begin'}
+        {mode === 'idle' && selectedBucket && !knockedOver && 'hold on the sand pile to fill your bucket'}
+        {mode === 'scooping' && !knockedOver && 'keep scooping…'}
+        {mode === 'carrying' && !knockedOver && 'click anywhere on the beach to drop it'}
       </div>
 
       {/* CSS Animation over sand pile */}
@@ -322,28 +364,30 @@ export default function SandcastleBuilder() {
       )}
       
       {/* Mold Palette */}
-      <div className="absolute top-5 left-1/2 -translate-x-1/2 flex gap-3 p-3 bg-[var(--ui-panel)] rounded-2xl backdrop-blur-md z-10">
-        {[1, 2, 3, 4, 5].map(id => (
-          <button
-            key={id}
-            className={`w-16 h-16 rounded-xl border-2 transition-all p-1 
-              ${selectedBucket === id ? 'border-[var(--sand)] bg-[rgba(255,217,138,0.12)]' : 'border-transparent bg-[rgba(255,255,255,0.07)] hover:-translate-y-1'}`}
-            onClick={() => {
-              if (mode === 'carrying') return;
-              setSelectedBucket(id);
-              setFillLevel(0);
-            }}
-          >
-            <Image
-              src={`/Bucket-${id}.png`}
-              alt={`Bucket ${id}`}
-              width={64}
-              height={64}
-              className="w-full h-full object-contain pointer-events-none"
-            />
-          </button>
-        ))}
-      </div>
+      {!knockedOver && (
+        <div className="absolute top-5 left-1/2 -translate-x-1/2 flex gap-3 p-3 bg-[var(--ui-panel)] rounded-2xl backdrop-blur-md z-10">
+          {[1, 2, 3, 4, 5].map(id => (
+            <button
+              key={id}
+              className={`w-16 h-16 rounded-xl border-2 transition-all p-1 
+                ${selectedBucket === id ? 'border-[var(--sand)] bg-[rgba(255,217,138,0.12)]' : 'border-transparent bg-[rgba(255,255,255,0.07)] hover:-translate-y-1'}`}
+              onClick={() => {
+                if (mode === 'carrying') return;
+                setSelectedBucket(id);
+                setFillLevel(0);
+              }}
+            >
+              <Image
+                src={`/Bucket-${id}.png`}
+                alt={`Bucket ${id}`}
+                width={64}
+                height={64}
+                className="w-full h-full object-contain pointer-events-none"
+              />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
