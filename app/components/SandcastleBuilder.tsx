@@ -290,11 +290,11 @@ export default function SandcastleBuilder() {
     const video = e.currentTarget;
 
     // Reset when the video loops back
-    if (video.currentTime < 3.0) {
+    if (video.currentTime < 2.0) {
       hasExplodedThisLoopRef.current = false;
     }
 
-    if (video.currentTime >= 3.5 && !hasExplodedThisLoopRef.current) {
+    if (video.currentTime >= 2.5 && !hasExplodedThisLoopRef.current) {
       hasExplodedThisLoopRef.current = true;
 
       if (engineRef.current) {

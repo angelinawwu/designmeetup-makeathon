@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Tideline",
   description: "build what the sea takes back",
+  icons: {
+    icon: "/Sand-2.png",
+  },
 };
 
 export default function RootLayout({
