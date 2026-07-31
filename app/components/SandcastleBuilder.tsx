@@ -29,7 +29,6 @@ export default function SandcastleBuilder() {
   const [selectedBucket, setSelectedBucket] = useState<number | null>(null);
   const [mode, setMode] = useState<'idle' | 'scooping' | 'carrying'>('idle');
   const [fillLevel, setFillLevel] = useState(0);
-  const [knockedOver, setKnockedOver] = useState(false);
 
   // Onboarding Tutorial State
   const [isOnboardingCompleted, setIsOnboardingCompleted] = useState(true); // Default true for SSR safety
@@ -40,11 +39,8 @@ export default function SandcastleBuilder() {
   const mouseRef = useRef({ x: 0, y: 0, down: false });
   const [windowSize, setWindowSize] = useState({ w: 0, h: 0 });
   const [images, setImages] = useState<Record<string, HTMLImageElement>>({});
-  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const shapesRef = useRef<any[]>([]);
   const renderLoopRef = useRef<number>(0);
-  const waveActiveRef = useRef(false);
-  const hasExplodedThisLoopRef = useRef(false);
 
   // Load images
   useEffect(() => {
@@ -67,14 +63,6 @@ export default function SandcastleBuilder() {
   useEffect(() => {
     const completed = localStorage.getItem('sandcastle_onboarding_completed') === 'true';
     setIsOnboardingCompleted(completed);
-  }, []);
-
-  useEffect(() => {
-    const bgImg = new window.Image();
-    bgImg.src = '/bg.png';
-    bgImg.onload = () => {
-      setBgImage(bgImg);
-    };
   }, []);
 
   // Initialize Physics & Canvas
@@ -126,7 +114,7 @@ export default function SandcastleBuilder() {
 
   // Render Loop
   useEffect(() => {
-    if (!canvasRef.current || Object.keys(images).length === 0 || !bgImage) return;
+    if (!canvasRef.current || Object.keys(images).length === 0) return;
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
 
@@ -136,23 +124,18 @@ export default function SandcastleBuilder() {
       const beachY = h * 0.66;
       const pile = { x: w * 0.13, y: beachY + (h - beachY) * 0.45, r: Math.min(w * 0.09, 110) };
 
-      if (waveActiveRef.current) {
-        ctx.clearRect(0, 0, w, h);
-      } else {
-        // Background Image
-        ctx.drawImage(bgImage, 0, 0, w, h);
+      ctx.clearRect(0, 0, w, h);
 
-        // Draw Pile
-        ctx.fillStyle = "#c49a5e"; // pileShadow
-        ctx.beginPath();
-        ctx.ellipse(pile.x, pile.y + pile.r * 0.42, pile.r * 1.1, pile.r * 0.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "#e2bd85"; // pile
-        ctx.beginPath();
-        ctx.ellipse(pile.x, pile.y, pile.r, pile.r * 0.62, 0, Math.PI, 0);
-        ctx.closePath();
-        ctx.fill();
-      }
+      // Draw Pile
+      ctx.fillStyle = "#c49a5e"; // pileShadow
+      ctx.beginPath();
+      ctx.ellipse(pile.x, pile.y + pile.r * 0.42, pile.r * 1.1, pile.r * 0.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#e2bd85"; // pile
+      ctx.beginPath();
+      ctx.ellipse(pile.x, pile.y, pile.r, pile.r * 0.62, 0, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
 
       // Draw Shapes
       shapesRef.current.forEach(body => {
@@ -186,7 +169,7 @@ export default function SandcastleBuilder() {
 
     renderLoopRef.current = requestAnimationFrame(render);
     return () => cancelAnimationFrame(renderLoopRef.current);
-  }, [windowSize, images, mode, fillLevel, selectedBucket, bgImage]);
+  }, [windowSize, images, mode, fillLevel, selectedBucket]);
 
   // Update Scooping logic
   useEffect(() => {
@@ -282,51 +265,34 @@ export default function SandcastleBuilder() {
   const selectedMold = selectedBucket ? MOLD_DATA[selectedBucket] : null;
 
   const handleKnockOver = () => {
-    setKnockedOver(true);
-    waveActiveRef.current = true;
-  };
-
-  const handleTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
-    const video = e.currentTarget;
-
-    // Reset when the video loops back
-    if (video.currentTime < 2.0) {
-      hasExplodedThisLoopRef.current = false;
-    }
-
-    if (video.currentTime >= 2.5 && !hasExplodedThisLoopRef.current) {
-      hasExplodedThisLoopRef.current = true;
-
-      if (engineRef.current) {
-        shapesRef.current.forEach(body => {
-          Matter.Body.setStatic(body, false);
-          const forceMagnitude = 0.05 * body.mass;
-          Matter.Body.applyForce(body, body.position, {
-            x: (Math.random() - 0.5) * forceMagnitude,
-            y: -Math.random() * forceMagnitude - 0.05
-          });
+    if (engineRef.current) {
+      shapesRef.current.forEach(body => {
+        Matter.Body.setStatic(body, false);
+        Matter.Body.setInertia(body, 500);
+        const forceMagnitude = 0.08 * body.mass;
+        Matter.Body.applyForce(body, body.position, {
+          x: (Math.random() - 0.5) * forceMagnitude * 1.5,
+          y: -Math.random() * forceMagnitude - 0.04
         });
-      }
+        Matter.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.15);
+      });
     }
   };
 
   return (
     <div className="relative w-full h-full overflow-hidden">
-      {knockedOver && (
-        <video
-          className="absolute inset-0 w-full h-full object-cover"
-          src="/Stylized Wave Loop.mp4"
-          autoPlay
-          loop
-          muted
-          playsInline
-          onTimeUpdate={handleTimeUpdate}
-        />
-      )}
+      <video
+        className="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none"
+        src="/Stylized Wave Loop.mp4"
+        autoPlay
+        loop
+        muted
+        playsInline
+      />
 
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 block w-full h-full cursor-crosshair z-0"
+        className="absolute inset-0 block w-full h-full cursor-crosshair z-10"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -380,28 +346,28 @@ export default function SandcastleBuilder() {
         </div>
       </div>
 
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-4 pointer-events-none text-[var(--ui-text)] z-10">
+      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-4 pointer-events-none text-[var(--ui-text)] z-20">
         <h1 className="text-lg tracking-widest opacity-90 font-[Georgia]">tide<em className="italic text-[var(--sand)] font-[Georgia]">line</em></h1>
 
         <button
-          className="pointer-events-auto px-4 py-2 bg-[var(--ui-danger)] text-[#1a1430] rounded-lg uppercase tracking-wider text-sm transition-all hover:scale-105 active:scale-95"
+          className="pointer-events-auto px-4 py-2 bg-[var(--ui-danger)] text-[#1a1430] rounded-lg uppercase tracking-wider text-sm transition-all hover:scale-105 active:scale-95 font-semibold shadow-lg"
           onClick={handleKnockOver}
         >
           Knock Over
         </button>
       </div>
 
-      <div className="absolute bottom-28 left-1/2 -translate-x-1/2 italic text-[var(--ink-dim)] pointer-events-none text-center opacity-80 z-10 font-[Georgia]">
-        {mode === 'idle' && !selectedBucket && !knockedOver && 'choose a bucket to begin'}
-        {mode === 'idle' && selectedBucket && !knockedOver && 'hold on the sand pile to fill your bucket'}
-        {mode === 'scooping' && !knockedOver && 'keep scooping…'}
-        {mode === 'carrying' && !knockedOver && 'click anywhere on the beach to drop it'}
+      <div className="absolute bottom-28 left-1/2 -translate-x-1/2 italic text-[var(--ink-dim)] pointer-events-none text-center opacity-80 z-20 font-[Georgia]">
+        {mode === 'idle' && !selectedBucket && 'choose a bucket to begin'}
+        {mode === 'idle' && selectedBucket && 'hold on the sand pile to fill your bucket'}
+        {mode === 'scooping' && 'keep scooping…'}
+        {mode === 'carrying' && 'click anywhere on the beach to drop it'}
       </div>
 
       {/* CSS Animation over sand pile */}
       {selectedMold && (mode === 'scooping' || (mode === 'idle' && fillLevel > 0)) && (
         <div
-          className="absolute z-10 pointer-events-none -translate-x-1/2 -translate-y-full"
+          className="absolute z-20 pointer-events-none -translate-x-1/2 -translate-y-full"
           style={{
             left: pileLeft,
             top: pileTop - 40,
@@ -437,33 +403,31 @@ export default function SandcastleBuilder() {
       )}
 
       {/* Mold Palette */}
-      {!knockedOver && (
-        <div className="absolute top-5 left-1/2 -translate-x-1/2 flex gap-3 p-3 bg-[var(--ui-panel)] rounded-2xl backdrop-blur-md z-10">
-          {[1, 2, 3, 4, 5].map(id => (
-            <button
-              key={id}
-              className={`w-16 h-16 rounded-xl border-2 transition-all p-1 
-                ${selectedBucket === id ? 'border-[var(--sand)] bg-[rgba(255,217,138,0.12)]' : 'border-transparent bg-[rgba(255,255,255,0.07)] hover:-translate-y-1'}`}
-              onClick={() => {
-                if (mode === 'carrying') return;
-                setSelectedBucket(id);
-                setFillLevel(0);
-                if (!isOnboardingCompleted) {
-                  setStep1Completed(true);
-                }
-              }}
-            >
-              <Image
-                src={`/Bucket-${id}.png`}
-                alt={`Bucket ${id}`}
-                width={64}
-                height={64}
-                className="w-full h-full object-contain pointer-events-none"
-              />
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="absolute top-5 left-1/2 -translate-x-1/2 flex gap-3 p-3 bg-[var(--ui-panel)] rounded-2xl backdrop-blur-md z-20">
+        {[1, 2, 3, 4, 5].map(id => (
+          <button
+            key={id}
+            className={`w-16 h-16 rounded-xl border-2 transition-all p-1 
+              ${selectedBucket === id ? 'border-[var(--sand)] bg-[rgba(255,217,138,0.12)]' : 'border-transparent bg-[rgba(255,255,255,0.07)] hover:-translate-y-1'}`}
+            onClick={() => {
+              if (mode === 'carrying') return;
+              setSelectedBucket(id);
+              setFillLevel(0);
+              if (!isOnboardingCompleted) {
+                setStep1Completed(true);
+              }
+            }}
+          >
+            <Image
+              src={`/Bucket-${id}.png`}
+              alt={`Bucket ${id}`}
+              width={64}
+              height={64}
+              className="w-full h-full object-contain pointer-events-none"
+            />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
