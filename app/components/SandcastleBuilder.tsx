@@ -305,7 +305,7 @@ export default function SandcastleBuilder() {
             <span className="font-bold text-xs uppercase tracking-wider text-[var(--sand)] font-sans">Getting Started</span>
             <span className="text-[10px] font-mono text-[var(--ink-dim)]">Tutorial</span>
           </div>
-          
+
           <div className="flex flex-col gap-4 font-sans text-left">
             {/* Step 1 */}
             <div className={`flex items-start gap-3 transition-opacity duration-300 ${step1Completed ? 'opacity-40' : 'opacity-100'}`}>
@@ -350,7 +350,7 @@ export default function SandcastleBuilder() {
         <h1 className="text-lg tracking-widest opacity-90 font-[Georgia]">tide<em className="italic text-[var(--sand)] font-[Georgia]">line</em></h1>
 
         <button
-          className="pointer-events-auto px-4 py-2 bg-[var(--ui-danger)] text-[#1a1430] rounded-lg uppercase tracking-wider text-sm transition-all hover:scale-105 active:scale-95 font-semibold shadow-lg"
+          className="pointer-events-auto px-4 py-2 bg-[var(--ui-accent)] text-[#1a1430] rounded-lg uppercase tracking-wider text-sm transition-all hover:scale-105 active:scale-95 shadow-lg"
           onClick={handleKnockOver}
         >
           Knock Over
