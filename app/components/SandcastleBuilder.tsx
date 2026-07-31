@@ -174,7 +174,7 @@ export default function SandcastleBuilder() {
         if (img) {
           ctx.save();
           ctx.globalAlpha = 0.6;
-          const displayWidth = 100;
+          const displayWidth = PART_DISPLAY_WIDTH;
           const displayHeight = (img.height / img.width) * displayWidth;
           ctx.drawImage(img, mouseRef.current.x - displayWidth / 2, mouseRef.current.y - displayHeight / 2, displayWidth, displayHeight);
           ctx.restore();
@@ -202,6 +202,9 @@ export default function SandcastleBuilder() {
           const next = f + (0.4 * dt); // scoop rate (takes ~2.5s)
           if (next >= 1) {
             setMode('carrying');
+            if (!isOnboardingCompleted) {
+              setStep2Completed(true);
+            }
             return 1;
           }
           return next;
@@ -212,7 +215,7 @@ export default function SandcastleBuilder() {
     };
     frameId = requestAnimationFrame(update);
     return () => cancelAnimationFrame(frameId);
-  }, [mode]);
+  }, [mode, isOnboardingCompleted]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     mouseRef.current.down = true;
@@ -239,6 +242,14 @@ export default function SandcastleBuilder() {
         setMode('idle');
         setFillLevel(0);
         setSelectedBucket(null);
+
+        if (!isOnboardingCompleted) {
+          setStep3Completed(true);
+          setTimeout(() => {
+            setIsOnboardingCompleted(true);
+            localStorage.setItem('sandcastle_onboarding_completed', 'true');
+          }, 1000);
+        }
       }
       return;
     }
@@ -321,6 +332,54 @@ export default function SandcastleBuilder() {
         onPointerUp={handlePointerUp}
       />
 
+      {/* Onboarding / Tutorial Card */}
+      <div className={`onboarding-card ${isOnboardingCompleted ? 'is-hidden' : ''}`}>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.08)] pb-2.5">
+            <span className="font-bold text-xs uppercase tracking-wider text-[var(--sand)] font-sans">Getting Started</span>
+            <span className="text-[10px] font-mono text-[var(--ink-dim)]">Tutorial</span>
+          </div>
+          
+          <div className="flex flex-col gap-4 font-sans text-left">
+            {/* Step 1 */}
+            <div className={`flex items-start gap-3 transition-opacity duration-300 ${step1Completed ? 'opacity-40' : 'opacity-100'}`}>
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center border text-[11px] font-mono shrink-0 transition-all duration-300
+                ${step1Completed ? 'bg-[var(--sand)] border-[var(--sand)] text-[#1a1430] font-bold' : 'border-[var(--ink-dim)] text-[var(--ink-dim)]'}`}>
+                {step1Completed ? '✓' : '1'}
+              </div>
+              <div className="flex flex-col">
+                <span className={`font-semibold text-sm leading-none transition-colors ${step1Completed ? 'line-through text-[var(--ink-dim)]' : 'text-[var(--ink)]'}`}>Select a bucket</span>
+                <span className="text-[11px] text-[var(--ink-dim)] leading-tight mt-1">Pick a style from the options at the top.</span>
+              </div>
+            </div>
+
+            {/* Step 2 */}
+            <div className={`flex items-start gap-3 transition-opacity duration-300 ${step2Completed ? 'opacity-40' : step1Completed ? 'opacity-100' : 'opacity-30'}`}>
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center border text-[11px] font-mono shrink-0 transition-all duration-300
+                ${step2Completed ? 'bg-[var(--sand)] border-[var(--sand)] text-[#1a1430] font-bold' : 'border-[var(--ink-dim)] text-[var(--ink-dim)]'}`}>
+                {step2Completed ? '✓' : '2'}
+              </div>
+              <div className="flex flex-col">
+                <span className={`font-semibold text-sm leading-none transition-colors ${step2Completed ? 'line-through text-[var(--ink-dim)]' : 'text-[var(--ink)]'}`}>Fill with sand</span>
+                <span className="text-[11px] text-[var(--ink-dim)] leading-tight mt-1">Press and hold on the sand pile at the bottom-left.</span>
+              </div>
+            </div>
+
+            {/* Step 3 */}
+            <div className={`flex items-start gap-3 transition-opacity duration-300 ${step3Completed ? 'opacity-40' : step2Completed ? 'opacity-100' : 'opacity-30'}`}>
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center border text-[11px] font-mono shrink-0 transition-all duration-300
+                ${step3Completed ? 'bg-[var(--sand)] border-[var(--sand)] text-[#1a1430] font-bold' : 'border-[var(--ink-dim)] text-[var(--ink-dim)]'}`}>
+                {step3Completed ? '✓' : '3'}
+              </div>
+              <div className="flex flex-col">
+                <span className={`font-semibold text-sm leading-none transition-colors ${step3Completed ? 'line-through text-[var(--ink-dim)]' : 'text-[var(--ink)]'}`}>Place it down</span>
+                <span className="text-[11px] text-[var(--ink-dim)] leading-tight mt-1">Click anywhere on the beach to drop the sand shape.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-4 pointer-events-none text-[var(--ui-text)] z-10">
         <h1 className="text-lg tracking-widest opacity-90 font-[Georgia]">tide<em className="italic text-[var(--sand)] font-[Georgia]">line</em></h1>
 
@@ -389,6 +448,9 @@ export default function SandcastleBuilder() {
                 if (mode === 'carrying') return;
                 setSelectedBucket(id);
                 setFillLevel(0);
+                if (!isOnboardingCompleted) {
+                  setStep1Completed(true);
+                }
               }}
             >
               <Image
